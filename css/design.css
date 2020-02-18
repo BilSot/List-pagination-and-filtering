@@ -117,3 +117,11 @@ body{
       background-color: #4ba6c3;
       color: #fff;
     }
+
+    .h2-no-results{
+      color: #4ba6c3;
+      font-weight: bold;
+      font-size: 1.6em;
+      text-align: center;
+      margin-top: 5%;
+    }
