@@ -5,7 +5,8 @@
 var studentsArray = [];
 var pages = 0;
 const itemsPerPage = 10;
-const selfObj = this;
+const HTTP_200 = 200;
+
 /***
  * Loads the local JSON file with the students' info
  * @param {String} path
@@ -15,9 +16,20 @@ const selfObj = this;
 function loadJSON(path, success, error) {
     let xhr = new XMLHttpRequest();
     xhr.onreadystatechange = () => {
-        if (xhr.readyState === 4) {
-            if (xhr.status === 200) {
-                success(JSON.parse(xhr.responseText));
+        //if the error handler is not provided
+        if (error === null) {
+            console.warn("error not specified; reverting to console");
+            error = console.error;
+        }
+        if (xhr.readyState === XMLHttpRequest.DONE) {
+            if (xhr.status === HTTP_200) {
+                //in case we have incorrect JSON format, we need to catch the error
+                try {
+                    let responseInJson = JSON.parse(xhr.responseText);
+                    success(responseInJson);
+                } catch (e) {
+                    error(e);
+                }
             } else {
                 error(xhr.status);
             }
@@ -31,8 +43,8 @@ loadJSON('students.json',
     function (data) {
         initializeData(data);
     },
-    function (status) {
-        console.error(status);
+    function (message) {
+        alert(message);
     });
 
 /***
@@ -45,34 +57,43 @@ function initializeData(data) {
     addSearchTextField();
     appendPageLinks(pages);
     showPage(studentsArray, 1);
-    highLightActiveAnchor(studentsArray);
+    addPageSwitchEvents(studentsArray);
 }
 
 /***
-* Initializes the global variables, studentsArray and pages; populates the 1st page with list items; sets the 'active' class to the selected link
+* Listens for the events that occur on page switch (anchor click)
 * @param {Array} studentsArray
 */
-function highLightActiveAnchor(studentsArray){
+function addPageSwitchEvents(studentsArray){
     let anchors = document.querySelectorAll('li > a');
     for (let i = 0; i < anchors.length; i++) {
-        anchors[i].addEventListener('click', function (event) {
-            let activeLinks = document.getElementsByClassName("active");
-            activeLinks[0].classList.remove('active');
-            event.target.className += " active";
-
-            showPage(studentsArray, parseInt(anchors[i].id));
-        });
+        let anchor = anchors[i];
+        anchor.addEventListener('click', pageSwitchEventHandler);
     }
 }
 
 /***
- * Populated the selected page with the according list items
+ * Event handler for the page switch event. Removes the class `active` from the previous page and adds it to the selected one
+ * It calls the function responsible for displaying the content on the page
+ * @param {Event} event
+ */
+function pageSwitchEventHandler(event) {
+    let activeLinks = document.getElementsByClassName("active");
+    let selectedAnchor = event.target;
+    activeLinks[0].classList.remove('active');
+    selectedAnchor.className += " active";
+    showPage(studentsArray, parseInt(selectedAnchor.id));
+}
+
+/***
+ * Populates the selected page with the respective list items
  * @param {Array} students
  * @param {Number} pageId
  */
 function showPage(students, pageId) {
     let divPage = document.querySelector('div.page');
     let studentsListElem = document.querySelector('ul.student-list');
+    //Clear the existing results
     studentsListElem.innerHTML = '';
     let divNoResultsElem =  document.querySelector('div.js-no-results');
 
@@ -80,50 +101,17 @@ function showPage(students, pageId) {
         if (!divNoResultsElem) {
             createNoResultsSection(divPage);
         }
-        return;
-    }else {
+    } else {
         if(divNoResultsElem) {
             divPage.removeChild(divNoResultsElem);
         }
-        let startIndex = 0, endIndex = 0;
-        startIndex = (pageId - 1) * itemsPerPage;
-        endIndex = pageId * itemsPerPage;
-        if (endIndex > students.length) {
-            endIndex = students.length;
-        }
-
-        for (let j = startIndex; j < endIndex; j++) {
-            let li = createElement('li', ['student-item', 'cf']);
-            let divStudentDetails = createElement('div', ['student-details']);
-            let imageAvatar = createElement('img', ['avatar']);
-            let nameHeader = createElement('h3', []);
-            let emailSpan = createElement('span', ['email']);
-            let divJoinedDetails = createElement('div', ['joined-details']);
-            let dateSpan = createElement('span', ['date']);
-
-            li.appendChild(divStudentDetails);
-            li.appendChild(divJoinedDetails);
-
-            divStudentDetails.appendChild(imageAvatar);
-            divStudentDetails.appendChild(nameHeader);
-            divStudentDetails.appendChild(emailSpan);
-
-            divJoinedDetails.appendChild(dateSpan);
-
-            imageAvatar.src = students[j].src;
-            nameHeader.innerHTML = students[j].name;
-            emailSpan.innerHTML = students[j].email;
-            dateSpan.innerHTML = students[j].joinedDetails;
-
-            studentsListElem.appendChild(li);
-            //console.log(students[j]);
-        }
+        createResultsSection(pageId, students, studentsListElem);
     }
 }
 
 /***
  * Creates the HTML section of the page for no results found
- * @param {HTMLElement} divPage
+ * @param {HTMLDivElement} divPage
  */
 function createNoResultsSection(divPage){
     let headerNoResults = document.createElement('h2');
@@ -137,7 +125,49 @@ function createNoResultsSection(divPage){
 }
 
 /***
- * Created an HTML element with the given tag and styling classes
+ * Creates the HTML section which holds the li items with the students' info.
+ * Calculates the items of the array that should be displayed on the selected page
+ * @param {Number} pageId The 1-based index of the page to be displayed
+ * @param {Array} students An array of all the students including those that might not be displayed because of pagination
+ * @param {HTMLUListElement} studentsListElem The parent element hosting the student li entries
+ */
+function createResultsSection(pageId, students, studentsListElem) {
+    let startIndex = 0, endIndex = 0;
+    startIndex = (pageId - 1) * itemsPerPage;
+    endIndex = pageId * itemsPerPage;
+    if (endIndex > students.length) {
+        endIndex = students.length;
+    }
+
+    for (let j = startIndex; j < endIndex; j++) {
+        let li = createElement('li', ['student-item', 'cf']);
+        let divStudentDetails = createElement('div', ['student-details']);
+        let imageAvatar = createElement('img', ['avatar']);
+        let nameHeader = createElement('h3', []);
+        let emailSpan = createElement('span', ['email']);
+        let divJoinedDetails = createElement('div', ['joined-details']);
+        let dateSpan = createElement('span', ['date']);
+
+        li.appendChild(divStudentDetails);
+        li.appendChild(divJoinedDetails);
+
+        divStudentDetails.appendChild(imageAvatar);
+        divStudentDetails.appendChild(nameHeader);
+        divStudentDetails.appendChild(emailSpan);
+
+        divJoinedDetails.appendChild(dateSpan);
+
+        imageAvatar.src = students[j].src;
+        nameHeader.innerHTML = students[j].name;
+        emailSpan.innerHTML = students[j].email;
+        dateSpan.innerHTML = students[j].joinedDetails;
+
+        studentsListElem.appendChild(li);
+    }
+}
+
+/***
+ * Creates an HTML element with the given tag and styling classes
  * @param {String} tag
  * @param {Array} elemClass
  * @return {HTMLElement}
@@ -174,7 +204,7 @@ function appendPageLinks(pages) {
     for (let i = 1; i <= pages; i++) {
         let li = document.createElement('li');
         let anchor = document.createElement('a');
-        if (i == 1) {
+        if (i === 1) {
             anchor.className = 'active';
         }
         anchor.id = i;
@@ -187,8 +217,8 @@ function appendPageLinks(pages) {
 }
 
 /***
- * Creates the input text field and the button, used for searching(filtering) the students
- * Handles the events on key up, for the input, and click, for the button
+ * Creates the search input text field and the button, used for filtering the students
+ * Listens for the events when the button is clicked and an input is made from the keyboard
  */
 function addSearchTextField(){
     let divStudentSearch = document.querySelector('div.student-search');
@@ -203,32 +233,35 @@ function addSearchTextField(){
     divStudentSearch.appendChild(inputElem);
     divStudentSearch.appendChild(searchButton);
 
-    inputElem.addEventListener('keyup', triggerKeyUp);
-    searchButton.addEventListener('click', triggerClick);
+    inputElem.addEventListener('keyup', handleKeyUp);
+    searchButton.addEventListener('click', handleClick);
 }
 
 /***
- * Event handler for the key up event
- * @param {Object} inputElem
+ * Event handler for the key up event. Takes the content from the input element and performs the filtering against it
+ * @param {Event} event
  */
-function triggerKeyUp(inputElem){
-    let searchTerm = inputElem.target.value.toLowerCase();
-    selfObj.searchTerm(searchTerm);
+function handleKeyUp(event){
+    let term = event.target.value;
+    searchTerm(term);
 }
 
 /***
- * Event handler for the click event
+ * Event handler for the click event. Takes the3
+ * content from the input element and performs the filtering against it
  */
-function triggerClick(){
-    let searchTerm = document.querySelector('input#js-search-field').value.toLowerCase();
-    selfObj.searchTerm(searchTerm);
+function handleClick(){
+    let term = document.querySelector('input#js-search-field').value;
+    searchTerm(term);
 }
 
 /***
- * Filters the students with the given search term and stores the results in a new array
+ * Filters the students with the given search term and updates the DOM with the results. The first page is selected.
+ * Filtering is plain text and NOT case sensitive.
  * @param {String} searchTerm
  */
 function searchTerm(searchTerm){
+    searchTerm = searchTerm.toLowerCase();
     let searchResults = [];
     studentsArray.forEach(student => {
         let studentName = student.name.toLowerCase();
@@ -240,5 +273,5 @@ function searchTerm(searchTerm){
     let searchResultPages = calculatePages(searchResults.length);
     appendPageLinks(searchResultPages);
     showPage(searchResults, 1);
-    highLightActiveAnchor(searchResults);
+    addPageSwitchEvents(searchResults);
 }
